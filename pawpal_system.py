@@ -10,6 +10,7 @@ and priority-aware daily plan generation with explanations.
 
 from dataclasses import dataclass, field
 from datetime import date, timedelta
+import json
 
 PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
 RECURRING_FREQUENCIES = {"daily": timedelta(days=1), "weekly": timedelta(weeks=1)}
@@ -47,6 +48,33 @@ class Task:
             completed=False,
         )
 
+    def to_dict(self) -> dict:
+        """Convert this task to a JSON-serializable dictionary."""
+        return {
+            "description": self.description,
+            "time": self.time,
+            "duration": self.duration,
+            "frequency": self.frequency,
+            "priority": self.priority,
+            "pet_name": self.pet_name,
+            "date": self.date.isoformat(),
+            "completed": self.completed,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "Task":
+        """Reconstruct a Task from a dictionary (e.g. loaded from JSON)."""
+        return cls(
+            description=data["description"],
+            time=data["time"],
+            duration=data["duration"],
+            frequency=data.get("frequency", "once"),
+            priority=data.get("priority", "medium"),
+            pet_name=data.get("pet_name", ""),
+            date=date.fromisoformat(data["date"]),
+            completed=data.get("completed", False),
+        )
+
 
 @dataclass
 class Pet:
@@ -56,13 +84,28 @@ class Pet:
     tasks: list[Task] = field(default_factory=list)
 
     def add_task(self, task: Task) -> None:
-        """Add a new task to this pet's task list and tag it with this pet's name."""
+        """Add a task to this pet and tag it with the pet's name."""
         task.pet_name = self.name
         self.tasks.append(task)
 
     def get_tasks(self) -> list[Task]:
         """Return all tasks for this pet."""
         return self.tasks
+
+    def to_dict(self) -> dict:
+        """Convert this pet (and its tasks) to a JSON-serializable dictionary."""
+        return {
+            "name": self.name,
+            "tasks": [t.to_dict() for t in self.tasks],
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "Pet":
+        """Reconstruct a Pet (and its tasks) from a dictionary."""
+        return cls(
+            name=data["name"],
+            tasks=[Task.from_dict(t) for t in data.get("tasks", [])],
+        )
 
 
 @dataclass
@@ -74,11 +117,11 @@ class Owner:
     preferences: dict = field(default_factory=dict)  # e.g. preferred time windows, priorities
 
     def add_pet(self, pet: Pet) -> None:
-        """Add a new pet to this owner's list of pets."""
+        """Add a new pet to this owner's list."""
         self.pets.append(pet)
 
     def remove_pet(self, pet: Pet) -> None:
-        """Remove a pet from this owner's list of pets."""
+        """Remove a pet from this owner's list."""
         if pet in self.pets:
             self.pets.remove(pet)
 
@@ -87,11 +130,40 @@ class Owner:
         return self.pets
 
     def get_pet_by_name(self, name: str) -> Pet | None:
-        """Look up a pet by name. Returns None if not found."""
+        """Look up a pet by name, or return None if not found."""
         for pet in self.pets:
             if pet.name == name:
                 return pet
         return None
+
+    def to_dict(self) -> dict:
+        """Convert this owner (and all pets/tasks) to a JSON-serializable dictionary."""
+        return {
+            "name": self.name,
+            "preferences": self.preferences,
+            "pets": [p.to_dict() for p in self.pets],
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "Owner":
+        """Reconstruct an Owner (and all pets/tasks) from a dictionary."""
+        return cls(
+            name=data["name"],
+            preferences=data.get("preferences", {}),
+            pets=[Pet.from_dict(p) for p in data.get("pets", [])],
+        )
+
+    def save_to_json(self, filepath: str = "data.json") -> None:
+        """Save this owner and all pets/tasks to a JSON file."""
+        with open(filepath, "w") as f:
+            json.dump(self.to_dict(), f, indent=2)
+
+    @classmethod
+    def load_from_json(cls, filepath: str = "data.json") -> "Owner":
+        """Load an owner and all pets/tasks from a JSON file."""
+        with open(filepath, "r") as f:
+            data = json.load(f)
+        return cls.from_dict(data)
 
 
 @dataclass
@@ -108,8 +180,12 @@ class Scheduler:
         return all_tasks
 
     def sort_by_time(self, tasks: list[Task]) -> list[Task]:
-        """Return tasks sorted chronologically by their time attribute ("HH:MM")."""
+        """Return tasks sorted chronologically by time."""
         return sorted(tasks, key=lambda t: t.time)
+
+    def sort_by_priority_then_time(self, tasks: list[Task]) -> list[Task]:
+        """Advanced scheduling: sort by priority (high first), then by time within each priority."""
+        return sorted(tasks, key=lambda t: (PRIORITY_ORDER.get(t.priority, 1), t.time))
 
     def filter_tasks(
         self,
@@ -117,7 +193,7 @@ class Scheduler:
         completed: bool | None = None,
         frequency: str | None = None,
     ) -> list[Task]:
-        """Return tasks filtered by pet name, completion status, and/or frequency."""
+        """Return tasks filtered by pet name, status, and/or frequency."""
         tasks = self.get_all_tasks()
         if pet_name is not None:
             tasks = [t for t in tasks if t.pet_name == pet_name]
@@ -128,7 +204,7 @@ class Scheduler:
         return tasks
 
     def detect_conflicts(self, tasks: list[Task]) -> list[str]:
-        """Return warning messages for tasks scheduled at the same time."""
+        """Return warnings for tasks scheduled at the same time."""
         warnings: list[str] = []
         seen: dict[tuple, list[Task]] = {}
         for task in tasks:
@@ -153,8 +229,7 @@ class Scheduler:
 
     def generate_plan(self, available_minutes: int) -> dict:
         """Build a priority-based daily plan that fits the time budget, with explanations."""
-        tasks = self.filter_tasks(completed=False)
-        tasks = sorted(tasks, key=lambda t: (PRIORITY_ORDER.get(t.priority, 1), t.time))
+        tasks = self.sort_by_priority_then_time(self.filter_tasks(completed=False))
 
         scheduled: list[Task] = []
         skipped: list[Task] = []
@@ -191,3 +266,49 @@ class Scheduler:
             "minutes_available": available_minutes,
             "explanation": explanation,
         }
+
+    @staticmethod
+    def _to_minutes(hhmm: str) -> int:
+        """Convert a 'HH:MM' string to minutes since midnight."""
+        hours, minutes = hhmm.split(":")
+        return int(hours) * 60 + int(minutes)
+
+    @staticmethod
+    def _to_hhmm(total_minutes: int) -> str:
+        """Convert minutes since midnight back to a zero-padded 'HH:MM' string."""
+        return f"{total_minutes // 60:02d}:{total_minutes % 60:02d}"
+
+    def find_next_available_slot(
+        self,
+        duration_minutes: int,
+        day_start: str = "08:00",
+        day_end: str = "22:00",
+        on_date: date | None = None,
+    ) -> str | None:
+        """Third algorithmic capability: find the earliest open slot today that fits a task.
+
+        Walks the day's existing tasks in chronological order and returns the first
+        gap (as 'HH:MM') large enough to hold ``duration_minutes``, or None if the day
+        has no room. Existing tasks are treated as busy intervals [start, start+duration).
+        """
+        if on_date is None:
+            on_date = date.today()
+
+        start = self._to_minutes(day_start)
+        end = self._to_minutes(day_end)
+
+        busy = sorted(
+            (self._to_minutes(t.time), self._to_minutes(t.time) + t.duration)
+            for t in self.get_all_tasks()
+            if t.date == on_date
+        )
+
+        cursor = start
+        for busy_start, busy_end in busy:
+            if busy_start - cursor >= duration_minutes:
+                return self._to_hhmm(cursor)
+            cursor = max(cursor, busy_end)
+
+        if end - cursor >= duration_minutes:
+            return self._to_hhmm(cursor)
+        return None

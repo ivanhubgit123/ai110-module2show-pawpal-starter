@@ -153,3 +153,50 @@ def test_generate_plan_respects_time_budget_and_priority():
     assert plan["scheduled"][0].description == "Walk"
     assert len(plan["skipped"]) == 1
     assert plan["skipped"][0].description == "Grooming"
+
+
+def test_find_next_available_slot_skips_busy_time():
+    """Advanced capability: finding the next open slot should skip past busy periods."""
+    owner = Owner(name="Alex")
+    pet = Pet(name="Biscuit")
+    owner.add_pet(pet)
+    pet.add_task(Task(description="Morning walk", time="08:00", duration=30))
+    pet.add_task(Task(description="Feeding", time="08:30", duration=15))
+
+    scheduler = Scheduler(owner=owner)
+    slot = scheduler.find_next_available_slot(duration_minutes=20, day_start="08:00")
+    assert slot == "08:45"
+
+
+def test_find_next_available_slot_returns_none_when_impossible():
+    """An impossible request (too long for the day window) should return None, not crash."""
+    owner = Owner(name="Alex")
+    pet = Pet(name="Biscuit")
+    owner.add_pet(pet)
+
+    scheduler = Scheduler(owner=owner)
+    slot = scheduler.find_next_available_slot(duration_minutes=2000)
+    assert slot is None
+
+
+def test_save_and_load_json_round_trip(tmp_path):
+    """Data persistence: saving to JSON and loading back should preserve all data."""
+    owner = Owner(name="Alex", preferences={"available_minutes": 45})
+    pet = Pet(name="Biscuit")
+    owner.add_pet(pet)
+    pet.add_task(Task(description="Walk", time="08:00", duration=30, priority="high", frequency="daily"))
+
+    filepath = tmp_path / "data.json"
+    owner.save_to_json(str(filepath))
+
+    loaded_owner = Owner.load_from_json(str(filepath))
+
+    assert loaded_owner.name == "Alex"
+    assert loaded_owner.preferences == {"available_minutes": 45}
+    assert len(loaded_owner.get_all_pets()) == 1
+
+    loaded_pet = loaded_owner.get_pet_by_name("Biscuit")
+    assert loaded_pet is not None
+    assert len(loaded_pet.get_tasks()) == 1
+    assert loaded_pet.get_tasks()[0].description == "Walk"
+    assert loaded_pet.get_tasks()[0].frequency == "daily"
