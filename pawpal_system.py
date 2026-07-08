@@ -33,10 +33,7 @@ class Task:
         self.completed = True
 
     def next_occurrence(self) -> "Task | None":
-        """
-        If this task is recurring (daily/weekly), return a fresh Task
-        representing the next occurrence. Returns None for one-off tasks.
-        """
+        """Return the next occurrence if this task recurs, else None."""
         if self.frequency not in RECURRING_FREQUENCIES:
             return None
         return Task(
@@ -104,12 +101,7 @@ class Scheduler:
     owner: Owner
 
     def get_all_tasks(self) -> list[Task]:
-        """
-        Collect all tasks across all of the owner's pets.
-
-        Talks to Owner via get_all_pets(), then asks each Pet for its own
-        tasks via get_tasks() rather than reaching into Pet.tasks directly.
-        """
+        """Collect all tasks across all of the owner's pets."""
         all_tasks: list[Task] = []
         for pet in self.owner.get_all_pets():
             all_tasks.extend(pet.get_tasks())
@@ -136,11 +128,7 @@ class Scheduler:
         return tasks
 
     def detect_conflicts(self, tasks: list[Task]) -> list[str]:
-        """
-        Return warning messages for any tasks scheduled at the same time
-        on the same date. This is a lightweight check (exact time match
-        only) rather than true overlapping-duration detection.
-        """
+        """Return warning messages for tasks scheduled at the same time."""
         warnings: list[str] = []
         seen: dict[tuple, list[Task]] = {}
         for task in tasks:
@@ -154,11 +142,7 @@ class Scheduler:
         return warnings
 
     def process_completion(self, task: Task) -> Task | None:
-        """
-        Mark a task complete, and if it's recurring, automatically create
-        and attach the next occurrence to the same pet. Returns the new
-        Task if one was created, otherwise None.
-        """
+        """Mark a task complete and auto-schedule its next occurrence if recurring."""
         task.mark_complete()
         next_task = task.next_occurrence()
         if next_task is not None:
@@ -168,14 +152,7 @@ class Scheduler:
         return next_task
 
     def generate_plan(self, available_minutes: int) -> dict:
-        """
-        Build a daily plan that fits within available_minutes, respecting
-        task priority and the owner's preferences. Returns a plan along
-        with a brief explanation of why each task was included or skipped.
-
-        Strategy: sort incomplete tasks by priority (high first), then by
-        time, and greedily include tasks until the time budget runs out.
-        """
+        """Build a priority-based daily plan that fits the time budget, with explanations."""
         tasks = self.filter_tasks(completed=False)
         tasks = sorted(tasks, key=lambda t: (PRIORITY_ORDER.get(t.priority, 1), t.time))
 
