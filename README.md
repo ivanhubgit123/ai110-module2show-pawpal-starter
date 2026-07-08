@@ -47,12 +47,62 @@ pip install -r requirements.txt
 Paste a sample of your app's CLI or Streamlit output here so a reader can see what a generated plan looks like:
 
 ```
-# e.g.:
-# Daily plan for Biscuit (Golden Retriever):
-#   08:00 — Morning walk (30 min) [priority: high]
-#   09:00 — Feeding (10 min) [priority: high]
-#   ...
-```
+Today's schedule
+Time
+
+Pet
+
+Task
+
+Duration (min)
+
+Priority
+
+Frequency
+
+Completed
+
+08:00
+
+Dog
+
+Walk
+
+15
+
+low
+
+once
+
+⬜
+
+09:00
+
+Cat
+
+Feed
+
+15
+
+medium
+
+weekly
+
+⬜
+
+10:00
+
+Fish
+
+Watch
+
+60
+
+high
+
+daily
+
+⬜
 
 ## 🧪 Testing PawPal+
 
@@ -92,3 +142,23 @@ Describe your app in numbered steps so a reader can follow along without watchin
 5. <!-- Add more steps as needed -->
 
 **Screenshot or video** *(optional)*: <!-- Insert a screenshot or link to a demo video here -->
+
+## Smarter Scheduling (Completed)
+
+| Feature | Method(s) | Notes |
+|---------|-----------|-------|
+| Task sorting | Scheduler.sort_by_time() | Sorts by the HH:MM time string |
+| Filtering | Scheduler.filter_tasks() | By pet name, completion status, and/or frequency |
+| Conflict handling | Scheduler.detect_conflicts() | Flags exact same-time matches, including across different pets |
+| Recurring tasks | Task.next_occurrence(), Scheduler.process_completion() | Daily/weekly tasks auto-generate their next occurrence via timedelta |
+| Priority planning | Scheduler.generate_plan() | Fits tasks into a time budget, high priority first, with explanations |
+
+## Smarter Scheduling (Completed)
+
+| Feature | Method(s) | Notes |
+|---------|-----------|-------|
+| Task sorting | Scheduler.sort_by_time() | Sorts by the HH:MM time string |
+| Filtering | Scheduler.filter_tasks() | By pet name, completion status, and/or frequency |
+| Conflict handling | Scheduler.detect_conflicts() | Flags exact same-time matches, including across different pets |
+| Recurring tasks | Task.next_occurrence(), Scheduler.process_completion() | Daily/weekly tasks auto-generate their next occurrence via timedelta |
+| Priority planning | Scheduler.generate_plan() | Fits tasks into a time budget, high priority first, with explanations |
